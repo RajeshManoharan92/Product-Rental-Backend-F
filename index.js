@@ -17,8 +17,10 @@ mongo.connect();
 
 // API
 
-app.use('/product',noderouter);
+app.use('/product', noderouter);
 
 // to create server
 
-app.listen(process.env.PORT || 3000)
+app.listen(process.env.PORT || 3000, () => {
+  console.log("server running on portal 3000")
+})

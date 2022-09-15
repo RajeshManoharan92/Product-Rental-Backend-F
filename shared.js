@@ -1,15 +1,15 @@
-const { MongoClient } = require('mongodb')
+const Mongoose = require('mongoose')
 
 // to connect mongodb Atlas
 
 module.exports = {
-    selecteddb: {},
 
     async connect() {
         try {
-            const response = await MongoClient.connect("mongodb+srv://mentor:BVJTLsZbBW668yRK@cluster0.n7jmf.mongodb.net/?retryWrites=true&w=majority")
-            this.selecteddb = response.db("productrental")
-           
+            const response = await Mongoose.connect(process.env.Mongo_URL).then(() => {
+                console.log("database connected successfully")
+            })
+
         }
         catch (err) {
             console.log(err)
