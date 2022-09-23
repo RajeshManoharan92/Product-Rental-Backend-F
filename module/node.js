@@ -1,18 +1,77 @@
 const User = require("../model/user")
 const Admin = require("../model/admin")
 const Product = require("../model/product")
+const Createproduct = require("../model/createproduct")
+const Adminproduct = require("../model/adminproduct")
 const Contact = require("../model/contact")
 const Cartupdate = require("../model/cartupdate")
 const bcrypt = require("bcryptjs")
 const jwt = require("jsonwebtoken")
+const Mongoose = require('mongoose')
 require('dotenv').config()
 
-// to get product datas
+// to get user product datas
 
 module.exports.getproductdetails = async (req, res) => {
+    const userId = req.params.id;
+    let userBlogs;
     try {
-        const response = await Product.find()
-        res.send(response)
+        try {
+            userBlogs = await Product.findById(userId).populate("blogs");
+        } catch (err) {
+            return console.log(err);
+        }
+        if (!userBlogs) {
+            return res.status(404).json({ message: "No Blog Found" });
+        }
+        return res.status(200).json({ user: userBlogs });
+    }
+    catch (err) {
+        console.log(err)
+    }
+
+}
+
+// to get admin product data
+
+module.exports.getadmindata = async (req, res) => {
+    try {
+
+        const userBlogs = await Adminproduct.find()
+
+        return res.status(200).json({ user: userBlogs })
+    }
+    catch (err) {
+        console.log(err)
+    }
+}
+
+// to update admin product data
+
+module.exports.updateadmindata = async (req, res) => {
+    const id = req.params.id
+    const { Productcompany, Productprice, Quantity, TotalAMount, FromDate, ToDate } = req.body
+    try {
+
+        const userBlogs = await Adminproduct.findByIdAndUpdate(id,  { Productcompany, Productprice, Quantity,
+             TotalAMount, FromDate, ToDate })
+
+        return res.status(200).json({ user: userBlogs })
+    }
+    catch (err) {
+        console.log(err)
+    }
+}
+
+// to delete admin product data
+
+module.exports.deleteadmindata = async (req, res) => {
+    try {
+        const name = await Adminproduct.findByIdAndDelete(req.params.id)
+        if (name) {
+            res.send(name)
+            return res.send("deleted successfully")
+        }
     }
     catch (err) {
         console.log(err)
@@ -22,18 +81,12 @@ module.exports.getproductdetails = async (req, res) => {
 // to get total product count
 
 module.exports.gettotalproductcount = async (req, res) => {
+    const userId = req.params.id
     try {
-        const response = await Product.aggregate([
-            {
-                $group: {
-                    _id: "$userId",
-                    Totalcount: { "$sum": 1 }
-                }
-            }, {
-                $project: { _id: 0 }
-            }
-        ])
-        res.send(response)
+
+        const userBlogs = await User.findById(userId)
+
+        return res.status(200).json({ user: userBlogs.blogs })
     }
     catch (err) {
         console.log(err)
@@ -59,24 +112,82 @@ module.exports.postproductdata = async (req, res) => {
 
     try {
 
-        const { ProductName, Productcompany, Productprice, Quantity, Hours, TotalAMount, FromDate, ToDate } = req.body
+        const { name, user, ProductName, Productcompany, Productprice, Quantity, Hours, TotalAMount, FromDate, ToDate } = req.body
 
-        // Create user in our database
-        const response = await Product.create({
-            ProductName,
-            Productcompany,
-            Productprice,
-            Quantity,
-            Hours,
-            TotalAMount, FromDate, ToDate
-        });
+        if (name == "user") {
+            try {
+                let existingUser;
+                try {
+                    existingUser = await User.findById(user);
+                } catch (err) {
+                    return console.log(err);
+                }
+                if (!existingUser) {
+                    return res.status(400).json({ message: "Unable TO FInd User By This ID" });
+                }
 
-        res.send(response)
+                const blog = new Product({
+                    user,
+                    ProductName,
+                    Productcompany,
+                    Productprice,
+                    Quantity,
+                    Hours,
+                    TotalAMount, FromDate, ToDate
+                });
+                try {
+                    const session = await Mongoose.startSession();
+                    session.startTransaction();
+                    await blog.save({ session });
+                    existingUser.blogs.push(blog);
+                    await existingUser.save({ session });
+                    await session.commitTransaction();
+                } catch (err) {
+                    console.log(err);
+                    return res.status(500).json({ message: err });
+                }
+
+                return res.status(200).json({ blog })
+            }
+            catch (err) {
+                console.log(err)
+            }
+        }
+
+        else if (name == "admin") {
+            try {
+                let existingUser;
+                try {
+                    existingUser = await Admin.findById(user);
+                } catch (err) {
+                    return console.log(err);
+                }
+                if (!existingUser) {
+                    return res.status(400).json({ message: "Unable TO FInd User By This ID" });
+                }
+
+                const admin = Adminproduct.create({
+                    ProductName,
+                    Productcompany,
+                    Productprice,
+                    Quantity,
+                    Hours,
+                    TotalAMount, FromDate, ToDate
+                });
+                return res.status(200).json(admin)
+            }
+            catch (err) {
+                console.log(err)
+            }
+        }
+
+
     }
     catch (err) {
         console.log(err)
     }
 }
+
 
 // to post contact us data
 
@@ -134,15 +245,20 @@ module.exports.getcartdetails = async (req, res) => {
 
 module.exports.deleteproductdata = async (req, res) => {
 
-    const id = req.params.id
+    const id = req.params.id;
 
+    let blog;
     try {
-        const response = await Product.deleteOne({ id })
-        res.send(response)
+        blog = await Product.findByIdAndRemove(id).populate("user");
+        await blog.user.blogs.pull(blog);
+        await blog.user.save();
+    } catch (err) {
+        console.log(err);
     }
-    catch (err) {
-        console.log(err)
+    if (!blog) {
+        return res.status(500).json({ message: "Unable To Delete" });
     }
+    return res.status(200).json({ message: "Successfully Delete" });
 }
 
 // to delete enquiry data
@@ -188,6 +304,7 @@ module.exports.userregister = async (req, res) => {
                     last_name: lastName,
                     email: email.toLowerCase(), // sanitize
                     password: encryptedUserPassword,
+                    blogs: [],
 
                 });
 
@@ -260,7 +377,6 @@ module.exports.userregister = async (req, res) => {
     }
 
 }
-
 
 // Login
 
@@ -370,6 +486,23 @@ module.exports.username = async (req, res) => {
     }
 };
 
+// to get user by id
+
+module.exports.userbyid = async (req, res) => {
+    const userId = req.params.id;
+    let userBlogs;
+    try {
+        userBlogs = await User.findById(userId).populate("blogs");
+    } catch (err) {
+        return console.log(err);
+    }
+    if (!userBlogs) {
+        return res.status(404).json({ message: "No Blog Found" });
+    }
+    return res.status(200).json({ user: userBlogs });
+};
+
+
 // set new password 
 
 module.exports.setnewpassword = async function (req, res) {
@@ -395,7 +528,7 @@ module.exports.setnewpassword = async function (req, res) {
                 }
 
                 // get id
-                
+
                 var _id = NoUser._id
 
                 // hashing password
@@ -422,7 +555,7 @@ module.exports.setnewpassword = async function (req, res) {
 
             try {
 
-                 // find admin in db
+                // find admin in db
 
                 const NoAdmin = await Admin.findOne({ email });
 
@@ -434,7 +567,7 @@ module.exports.setnewpassword = async function (req, res) {
 
                 var _id = NoAdmin._id
 
-                 // hashing password
+                // hashing password
 
                 encryptedUserPassword = await bcrypt.hash(password, 10);
 
@@ -452,6 +585,80 @@ module.exports.setnewpassword = async function (req, res) {
             }
         }
 
+    }
+    catch (err) {
+        console.log(err)
+    }
+}
+
+// to get Quiz Question
+
+module.exports.getproducts = async function (req, res) {
+    try {
+        const name = await Createproduct.find({})
+        if (name) {
+            res.send(name)
+        }
+    }
+    catch (err) {
+        console.log(err)
+    }
+}
+
+// to post new product
+
+module.exports.createproducts = async function (req, res) {
+    try {
+        const { ProductName, Productcompany, Productprice, minHours,
+            minPrice,
+            image,
+            Quantity,
+            Hours,
+            TotalAMount, } = req.body;
+
+        const name = await Createproduct.create({
+            ProductName,
+            Productcompany, Productprice, minHours,
+            minPrice,
+            image,
+            Quantity,
+            Hours,
+            TotalAMount,
+        })
+
+        if (name) {
+            res.send(name)
+        }
+    }
+    catch (err) {
+        console.log(err)
+
+    }
+}
+
+// to update product
+
+module.exports.updateproducts = async function (req, res) {
+    try {
+        const name = await Createproduct.findByIdAndUpdate(req.params.id, req.body)
+        if (name) {
+            res.send(name)
+        }
+    }
+    catch (err) {
+        console.log(err)
+    }
+}
+
+// to delete product
+
+module.exports.deleteproducts = async function (req, res) {
+    try {
+        const name = await Createproduct.findByIdAndDelete(req.params.id)
+        if (name) {
+            res.send(name)
+            return res.send("deleted successfully")
+        }
     }
     catch (err) {
         console.log(err)

@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
     last_name: { type: String, default: null },
     email: { type: String, unique: true },
     password: { type: String },
+    blogs: [{ type: mongoose.Types.ObjectId, ref: "productrentalproduct", required: true }],
     token: { type: String },
 });
 
